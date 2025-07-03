@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mapa Interativo - Lotes</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.15.1/css/ol.css" />
+  <script src="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.15.1/build/ol.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@latest"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@latest/dist/sweetalert2.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: row;
+    }
+    #map {
+      width: 66.6666%; height: 100%;
+      position: relative;
+    }
+    #infoPanel {
+      width: 33.3333%; height: 100%;
+      overflow-y: auto;
+      border-left: 1px solid #ccc;
+      padding: 10px;
+      box-sizing: border-box;
+      background-color: #f8f8f8;
+    }
+    .table-attributes {
+      width: 100%; border-collapse: collapse;
+    }
+    .table-attributes td {
+      padding: 4px; border: 1px solid #ccc;
+    }
+    #langSelect {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 9999;
+    }
+    #geolocateBtn {
+      position: absolute;
+      top: 50px;
+      left: 10px;
+      z-index: 9999;
+      padding: 6px 10px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #ocupChart {
+      display: block;
+      margin: 0 auto;
+      width: 100% !important;
+      max-width: 250px;
+      height: 250px !important;
+    }
+    /* MOBILE */
+    @media (max-width: 768px) {
+      html, body {
+        flex-direction: column;
+      }
+      #map {
+        width: 100%;
+        height: 50%;
+      }
+      #infoPanel {
+        width: 100%;
+        height: 50%;
+        border-left: none;
+        border-top: 1px solid #ccc;
+      }
+      #geolocateBtn {
+        top: 50px;
+        left: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <select id="langSelect" onchange="changeLanguage()">
+    <option value="pt">Português</option>
+    <option value="en">English</option>
+  </select>
+  <button id="geolocateBtn" onclick="goToUserLocation()">Minha Localização</button>
+  <div id="map"></div>
+  <div id="infoPanel"><em>Clique em um lote para ver os detalhes aqui.</em></div>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDxxxxxxx",
+      authDomain: "ruas-gurinhem.firebaseapp.com",
+      projectId: "ruas-gurinhem"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const translations = {
+      pt: {
+        inscricao_imobiliaria: "Inscrição Imobiliária",
+        bairro: "Bairro",
+        quadra: "Quadra",
+        lote: "Lote",
+        pavimentos: "Número de Pavimentos",
+        AREA_LOTE: "Área do Lote",
+        area_construida_2: "Área Construída",
+        ocup: "Taxa de Ocupação",
+        nm_prop: "Nome do Proprietário",
+        cpf_prop: "CPF do Proprietário",
+        estado_civil: "Estado Civil",
+        nm_conj: "Nome do Cônjuge",
+        cpf_conj: "CPF do Cônjuge",
+        data_io: "Data do Início da Ocupação",
+        id_cobertura: "Tipo de Cobertura"
+      }
+    };
+    const camposEditaveis = ["nm_prop", "cpf_prop", "estado_civil", "nm_conj", "cpf_conj", "data_io"];
+    const camposImovel = ["bairro", "quadra", "lote", "pavimentos", "AREA_LOTE", "area_construida_2", "ocup_%", "id_cobertura"];
+    let currentLang = "pt";
+    let selectedFeature = null;
+    let userLocationFeature = null;
+    function changeLanguage() {
+      currentLang = document.getElementById("langSelect").value;
+      Swal.fire("Idioma alterado!", `Você escolheu: ${currentLang.toUpperCase()}`, "info");
+    }
+    const map = new ol.Map({
+      target: "map",
+      layers: [new ol.layer.Tile({ source: new ol.source.OSM() })],
+      view: new ol.View({ center: ol.proj.fromLonLat([-35.3192, -7.0594]), zoom: 15 })
+    });
+    const loteSource = new ol.source.Vector();
+    const loteLayer = new ol.layer.Vector({
+      source: loteSource,
+      style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: "blue", width: 1 }),
+        fill: new ol.style.Fill({ color: "rgba(0,0,255,0.1)" })
+      })
+    });
+    map.addLayer(loteLayer);
+    const highlightStyle = new ol.style.Style({
+      stroke: new ol.style.Stroke({ color: "red", width: 2 }),
+      fill: new ol.style.Fill({ color: "rgba(255,0,0,0.2)" })
+    });
+    const userLocationStyle = new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 6,
+        fill: new ol.style.Fill({ color: "#007bff" }),
+        stroke: new ol.style.Stroke({ color: "#fff", width: 2 })
+      })
+    });
+    const userLocationSource = new ol.source.Vector();
+    const userLocationLayer = new ol.layer.Vector({ source: userLocationSource });
+    map.addLayer(userLocationLayer);
+
+    async function carregarLotes() {
+      const snapshot = await db.collection("GeoData").doc("lotes_rib").collection("features").get();
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const geom = new ol.format.GeoJSON().readGeometry(data.geometry, { dataProjection: "EPSG:4326", featureProjection: "EPSG:3857" });
+        const feature = new ol.Feature(geom);
+        const propertiesToSet = {};
+        for (const key in data) {
+          if (key === "geometry") continue;
+          if (key === "properties" && typeof data[key] === "object") {
+            Object.assign(propertiesToSet, data[key]);
+          } else {
+            propertiesToSet[key] = data[key];
+          }
+        }
+        feature.setProperties(propertiesToSet);
+        loteSource.addFeature(feature);
+      });
+    }
+    carregarLotes();
+    map.on("singleclick", function(evt) {
+      map.forEachFeatureAtPixel(evt.pixel, function(feature) {
+        if (selectedFeature) selectedFeature.setStyle(null);
+        selectedFeature = feature;
+        selectedFeature.setStyle(highlightStyle);
+        const props = feature.getProperties();
+        let html = `<h2>${props.inscricao_imobiliaria || "Detalhes do Lote"}</h2><table class="table-attributes">`;
+        html += `<tr><td colspan="2"><strong>Informações do Proprietário</strong></td></tr>`;
+        camposEditaveis.forEach(key => {
+          const value = props[key] ?? "";
+          const label = translations[currentLang]?.[key] || key;
+          html += `<tr><td><strong>${label}</strong></td><td>${value}</td></tr>`;
+        });
+        html += `<tr><td colspan="2"><strong>Informações do Imóvel</strong></td></tr>`;
+        camposImovel.forEach(key => {
+          if (["geometry", "__id", "type", "id", "id_lote", "id_0", ...camposEditaveis].includes(key)) return;
+          let value = props[key];
+          if (key === "id_cobertura") {
+            value = value === "1" ? "Telha cerâmica" : value === "2" ? "Laje" : value;
+          }
+          if (key === "ocup_%") {
+            const taxa = parseFloat(value);
+            const ocupacao = !isNaN(taxa) ? taxa : 0;
+            html += `<tr><td colspan="2"><canvas id="ocupChart"></canvas></td></tr>`;
+            setTimeout(() => {
+              const ctx = document.getElementById("ocupChart").getContext("2d");
+              new Chart(ctx, {
+                type: "pie",
+                data: {
+                  labels: ["Construído", "Livre"],
+                  datasets: [{ data: [ocupacao, 100 - ocupacao], backgroundColor: ["#007bff", "#d3d3d3"] }]
+                },
+                options: {
+                  responsive: false,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: "bottom" },
+                    title: { display: true, text: "Taxa de Ocupação" }
+                  }
+                }
+              });
+            }, 50);
+            value = ocupacao + "%";
+          }
+          const label = translations[currentLang]?.[key.replace("ocup_%", "ocup")] || key;
+          html += `<tr><td><strong>${label}</strong></td><td>${value}</td></tr>`;
+        });
+        html += `</table>`;
+        document.getElementById("infoPanel").innerHTML = html;
+      });
+    });
+
+    function goToUserLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          function (position) {
+            const coords = [position.coords.longitude, position.coords.latitude];
+            const center = ol.proj.fromLonLat(coords);
+            map.getView().animate({ center: center, zoom: 17 });
+
+            if (userLocationFeature) userLocationSource.removeFeature(userLocationFeature);
+            userLocationFeature = new ol.Feature(new ol.geom.Point(center));
+            userLocationFeature.setStyle(userLocationStyle);
+            userLocationSource.addFeature(userLocationFeature);
+          },
+          function (error) {
+            alert("Não foi possível obter sua localização.");
+          }
+        );
+      } else {
+        alert("Geolocalização não suportada pelo seu navegador.");
+      }
+    }
+  </script>
+</body>
+</html>
