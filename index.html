@@ -6,101 +6,313 @@
   <title>Mapa Interativo - Lotes</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.15.1/css/ol.css" />
   <script src="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.15.1/build/ol.js"></script>
+  <!-- Firebase SDKs para a aplicação e Firestore -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <!-- SweetAlert2 para alertas mais bonitos e interativos -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@latest"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@latest/dist/sweetalert2.min.css" />
+  <!-- Chart.js para gráficos (atualmente não utilizado, mas mantido) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
+    /* Layout básico para HTML e body, usando flexbox para painéis lado a lado */
     html, body {
-      margin: 0; padding: 0;
-      width: 100%; height: 100%;
-      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: 'Inter', sans-serif; /* Usando Inter como fonte padrão */
       display: flex;
-      flex-direction: row;
+      flex-direction: row; /* Padrão para linha em ecrãs maiores */
+      background-color: #f0f2f5; /* Fundo suave para a página */
     }
+    /* Estilo do contentor do mapa */
     #map {
-      width: 66.6666%; height: 100%;
-      position: relative;
+      width: 66.6666%; /* Dois terços da largura para o mapa */
+      height: 100%;
+      position: relative; /* Necessário para o posicionamento absoluto dos controlos */
+      border-radius: 12px; /* Cantos mais arredondados */
+      overflow: hidden; /* Garante que o conteúdo interno respeite os cantos arredondados */
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1); /* Sombra mais pronunciada */
+      margin: 10px; /* Adicionar margem para melhor espaçamento */
     }
+    /* Estilo do painel de informações */
     #infoPanel {
-      width: 33.3333%; height: 100%;
-      overflow-y: auto;
-      border-left: 1px solid #ccc;
-      padding: 10px;
+      width: 33.3333%; /* Um terço da largura para o painel de informações */
+      height: 100%;
+      overflow-y: auto; /* Ativar rolagem se o conteúdo exceder */
+      border-left: 1px solid #e0e0e0; /* Borda mais suave */
+      padding: 20px; /* Aumentar o preenchimento */
       box-sizing: border-box;
-      background-color: #f8f8f8;
+      background-color: #ffffff; /* Fundo branco limpo */
+      border-radius: 12px; /* Cantos mais arredondados */
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1); /* Sombra mais pronunciada */
+      margin: 10px; /* Adicionar margem para melhor espaçamento */
     }
+    /* Tabela para atributos dentro do painel de informações */
     .table-attributes {
-      width: 100%; border-collapse: collapse;
+      width: 100%;
+      border-collapse: separate; /* Usar separate para bordas arredondadas e espaçamento */
+      border-spacing: 0 8px; /* Espaçamento entre as linhas */
+      margin-top: 20px;
     }
-    .table-attributes td {
-      padding: 4px; border: 1px solid #ccc;
+    .table-attributes th, .table-attributes td {
+      padding: 12px; /* Aumentar o preenchimento para melhor legibilidade */
+      border: none; /* Remover bordas padrão da célula */
     }
-    #langSelect {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 9999;
+    .table-attributes strong {
+      color: #333;
+      font-weight: 600; /* Mais negrito */
     }
+
+    /* Estilo para a seção de campos editáveis */
+    .editable-section {
+      background-color: #e6f7ff; /* Fundo azul claro para editáveis */
+      border: 1px solid #91d5ff; /* Borda azul */
+      border-radius: 8px;
+      margin-bottom: 20px; /* Espaço abaixo da seção editável */
+      overflow: hidden; /* Garante que o conteúdo respeite o border-radius */
+    }
+    .editable-section h3 {
+      background-color: #40a9ff; /* Fundo mais escuro para o cabeçalho editável */
+      color: white;
+      font-weight: bold;
+      padding: 15px 12px;
+      margin: 0; /* Remover margem padrão do h3 */
+      text-align: left;
+      border-bottom: 1px solid #91d5ff;
+    }
+    .editable-section tr:nth-child(even) {
+      background-color: #f0faff; /* Fundo zebrado mais claro */
+    }
+
+    /* Estilo para a seção de campos não editáveis */
+    .non-editable-section {
+      background-color: #f9f9f9; /* Fundo cinza claro para não editáveis */
+      border: 1px solid #e0e0e0; /* Borda cinza */
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .non-editable-section h3 {
+      background-color: #d9d9d9; /* Fundo mais escuro para o cabeçalho não editável */
+      color: #333;
+      font-weight: bold;
+      padding: 15px 12px;
+      margin: 0; /* Remover margem padrão do h3 */
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .non-editable-section td {
+      color: #555; /* Cor de texto mais suave para não editáveis */
+    }
+
+    /* Estilo para grupos de formulário */
+    .form-group {
+      margin-bottom: 15px; /* Espaçamento entre grupos de campos */
+      padding: 0 15px; /* Adicionar padding horizontal para os form-groups */
+    }
+    .form-group label {
+      display: block; /* Cada rótulo em sua própria linha */
+      margin-bottom: 5px; /* Espaçamento entre rótulo e campo */
+      font-weight: 600;
+      color: #333;
+    }
+
+    /* Posicionamento e estilo do botão de geolocalização */
     #geolocateBtn {
       position: absolute;
-      top: 50px;
-      left: 10px;
+      top: 80px; /* Ajustar posição superior */
+      left: 20px;
       z-index: 9999;
-      padding: 6px 10px;
+      padding: 12px; /* Padding igual para um botão de ícone quadrado */
       background-color: #007bff;
       color: white;
       border: none;
-      border-radius: 4px;
+      border-radius: 50%; /* Botão redondo */
       cursor: pointer;
-      font-size: 14px;
+      font-size: 18px; /* Tamanho do ícone */
+      display: flex; /* Para centralizar o ícone */
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      width: 48px; /* Largura e altura para um círculo perfeito */
+      height: 48px;
     }
+    #geolocateBtn:hover {
+      background-color: #0056b3;
+      transform: translateY(-3px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.25);
+    }
+    #geolocateBtn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    /* Estilo para o ícone SVG dentro do botão */
+    #geolocateBtn svg {
+      fill: currentColor; /* Usa a cor do texto do botão */
+      width: 24px;
+      height: 24px;
+    }
+
+    /* Estilo do botão de salvar */
+    #saveBtn {
+      display: block; /* Ocupar a largura total */
+      width: calc(100% - 40px); /* Ajustar para padding do infoPanel */
+      margin: 30px auto 10px auto; /* Centralizar e adicionar margem */
+      padding: 15px 25px;
+      background-color: #28a745; /* Verde mais vibrante */
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: bold;
+      transition: background-color 0.3s ease, opacity 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    #saveBtn:hover:not(:disabled) {
+      background-color: #218838;
+      transform: translateY(-3px);
+      box-shadow: 0 6px 15px rgba(0,0,0,0.25);
+    }
+    #saveBtn:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+      opacity: 0.6;
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    /* Estilo para campos de input e select */
+    #infoPanel input[type="text"],
+    #infoPanel select {
+      padding: 10px;
+      border: 1px solid #b0d9ff; /* Borda azul clara */
+      border-radius: 6px;
+      width: 100%; /* Ocupar 100% da largura do form-group */
+      box-sizing: border-box;
+      font-size: 15px;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    #infoPanel input[type="text"]:focus,
+    #infoPanel select:focus {
+      border-color: #007bff; /* Borda azul mais escura no foco */
+      box-shadow: 0 0 0 3px rgba(0,123,255,0.25); /* Sombra de foco azul */
+      outline: none; /* Remover contorno padrão */
+    }
+
+    /* Estilo para campos não editáveis dentro da seção não editável */
+    .non-editable-section .value-display {
+      padding: 10px;
+      background-color: #f0f0f0; /* Fundo cinza para valores não editáveis */
+      border: 1px solid #e9e9e9;
+      border-radius: 6px;
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 15px;
+      color: #555;
+      min-height: 40px; /* Altura mínima para consistência */
+      display: flex;
+      align-items: center; /* Alinhar texto verticalmente */
+    }
+
+    /* Estilo do gráfico (atualmente não renderizado, mas bom ter) */
     #ocupChart {
       display: block;
-      margin: 0 auto;
+      margin: 20px auto;
       width: 100% !important;
       max-width: 250px;
       height: 250px !important;
     }
-    /* MOBILE */
+
+    /* Design responsivo para ecrãs menores (ex: telemóveis) */
     @media (max-width: 768px) {
       html, body {
-        flex-direction: column;
+        flex-direction: column; /* Empilhar painéis verticalmente */
       }
       #map {
-        width: 100%;
-        height: 50%;
+        width: calc(100% - 20px); /* Ajustar largura para margem */
+        height: 50%; /* Mapa ocupa a metade superior */
+        border-radius: 12px; /* Manter cantos arredondados */
+        margin-bottom: 0; /* Remover margem inferior */
       }
       #infoPanel {
-        width: 100%;
-        height: 50%;
-        border-left: none;
-        border-top: 1px solid #ccc;
+        width: calc(100% - 20px); /* Ajustar largura para margem */
+        height: 50%; /* Painel de informações ocupa a metade inferior */
+        border-left: none; /* Remover borda esquerda quando empilhado */
+        border-top: 1px solid #e0e0e0; /* Adicionar borda superior */
+        border-radius: 12px; /* Manter cantos arredondados */
+        margin-top: 0; /* Remover margem superior */
+        padding: 15px; /* Reduzir ligeiramente o preenchimento para mais espaço de conteúdo */
+      }
+      #infoPanel h2 {
+        font-size: 1.5em; /* Título principal menor */
+      }
+      #infoPanel h3 {
+        font-size: 1.2em; /* Títulos de seção menores */
+        padding: 10px 12px; /* Ajustar preenchimento do cabeçalho */
+      }
+      .form-group {
+        margin-bottom: 10px; /* Reduzir espaçamento entre grupos de formulário */
+        padding: 0 10px; /* Ajustar padding horizontal para os form-groups */
+      }
+      .form-group label {
+        font-size: 0.9em; /* Tamanho da fonte do rótulo menor */
+      }
+      #infoPanel input[type="text"],
+      #infoPanel select,
+      .non-editable-section .value-display {
+        padding: 8px; /* Reduzir ligeiramente o preenchimento do input */
+        font-size: 14px; /* Tamanho da fonte menor para inputs */
       }
       #geolocateBtn {
-        top: 50px;
-        left: 10px;
+        top: 20px; /* Manter posicionamento similar */
+        left: 10px; /* Mover ligeiramente para a esquerda para evitar aglomeração */
+        padding: 10px; /* Preenchimento do botão ligeiramente menor */
+        font-size: 16px; /* Tamanho da fonte do botão menor */
+        width: 40px; /* Ajustar tamanho para mobile */
+        height: 40px;
+      }
+      #langSelect { /* Este será removido, mas mantido para referência de otimização anterior */
+        display: none; /* Ocultar completamente o seletor de idioma */
+      }
+      #saveBtn {
+        width: calc(100% - 30px); /* Ajustar para novo preenchimento do infoPanel */
+        margin: 20px auto 10px auto; /* Ajustar margem */
+        padding: 12px 20px; /* Preenchimento do botão de salvar menor */
+        font-size: 16px; /* Tamanho da fonte do botão de salvar menor */
       }
     }
   </style>
 </head>
 <body>
-  <select id="langSelect" onchange="changeLanguage()">
-    <option value="pt">Português</option>
-    <option value="en">English</option>
-  </select>
-  <button id="geolocateBtn" onclick="goToUserLocation()">Minha Localização</button>
+  <!-- O dropdown de seleção de idioma foi removido conforme sua solicitação. -->
+  <!-- Botão de geolocalização como ícone discreto -->
+  <button id="geolocateBtn" onclick="goToUserLocation()" aria-label="Minha Localização">
+    <!-- Ícone SVG de localização -->
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>
+    </svg>
+  </button>
+  <!-- Contentor do mapa -->
   <div id="map"></div>
-  <div id="infoPanel"><em>Clique em um lote para ver os detalhes aqui.</em></div>
+  <!-- Painel de informações para exibir detalhes das feições -->
+  <div id="infoPanel"><em>Clique num lote para ver os detalhes aqui.</em></div>
+
   <script>
+    // Configuração do Firebase (substitua pela sua configuração real)
     const firebaseConfig = {
-      apiKey: "AIzaSyDxxxxxxx",
+      apiKey: "AIzaSyDxxxxxxx", // Chave de API de espaço reservado
       authDomain: "ruas-gurinhem.firebaseapp.com",
       projectId: "ruas-gurinhem"
     };
+    // Inicializar a aplicação Firebase
     firebase.initializeApp(firebaseConfig);
+    // Obter instância do Firestore
     const db = firebase.firestore();
+
+    // Traduções para vários campos
     const translations = {
       pt: {
         inscricao_imobiliaria: "Inscrição Imobiliária",
@@ -114,141 +326,360 @@
         nm_prop: "Nome do Proprietário",
         cpf_prop: "CPF do Proprietário",
         estado_civil: "Estado Civil",
+        estado_civil_solteiro: "Solteiro(a)",
+        estado_civil_casado: "Casado(a)",
+        estado_civil_uniao_estavel: "União Estável",
+        estado_civil_viuvo: "Viúvo(a)",
+        estado_civil_divorciado: "Divorciado(a)",
         nm_conj: "Nome do Cônjuge",
         cpf_conj: "CPF do Cônjuge",
-        data_io: "Data do Início da Ocupação",
-        id_cobertura: "Tipo de Cobertura"
+        ano_io: "Ano de Início da Ocupação", // Novo campo para o ano
+        data_io: "Data do Início da Ocupação", // Manter o antigo para compatibilidade se necessário
+        id_cobertura: "Tipo de Cobertura",
+        click_to_see_details: "Clique num lote para ver os detalhes aqui."
+      },
+      en: { // Adicionadas traduções em inglês para completude
+        inscricao_imobiliaria: "Property Registration",
+        bairro: "Neighborhood",
+        quadra: "Block",
+        lote: "Lot",
+        pavimentos: "Number of Floors",
+        AREA_LOTE: "Lot Area",
+        area_construida_2: "Built Area",
+        ocup: "Occupancy Rate",
+        nm_prop: "Owner Name",
+        cpf_prop: "Owner CPF",
+        estado_civil: "Marital Status",
+        estado_civil_solteiro: "Single",
+        estado_civil_casado: "Married",
+        estado_civil_uniao_estavel: "Stable Union",
+        estado_civil_viuvo: "Widowed",
+        estado_civil_divorciado: "Divorced",
+        nm_conj: "Spouse Name",
+        cpf_conj: "Spouse CPF",
+        ano_io: "Occupation Start Year",
+        data_io: "Occupation Start Date",
+        id_cobertura: "Roof Type",
+        click_to_see_details: "Click on a lot to see details here."
       }
     };
+
+    // Campos que são editáveis pelo utilizador
     const camposEditaveis = ["nm_prop", "cpf_prop", "estado_civil", "nm_conj", "cpf_conj", "data_io"];
+    // Campos relacionados com a propriedade (para exibição)
     const camposImovel = ["bairro", "quadra", "lote", "pavimentos", "AREA_LOTE", "area_construida_2", "ocup_%", "id_cobertura"];
-    let currentLang = "pt";
-    let selectedFeature = null;
-    let userLocationFeature = null;
-    function changeLanguage() {
-      currentLang = document.getElementById("langSelect").value;
-      Swal.fire("Idioma alterado!", `Você escolheu: ${currentLang.toUpperCase()}`, "info");
-    }
+
+    let currentLang = "pt"; // Idioma padrão (mantido para traduções internas, mas o seletor foi removido)
+    let selectedFeature = null; // Armazena a feição do mapa atualmente selecionada
+    let userLocationFeature = null; // Armazena o marcador da localização atual do utilizador
+
+    /**
+     * A função changeLanguage foi removida, pois o seletor de idioma não está mais presente.
+     * Se você precisar de funcionalidades de tradução no futuro, esta função precisaria ser reintroduzida
+     * e um mecanismo para alterar `currentLang` adicionado.
+     */
+    // function changeLanguage() {
+    //   currentLang = document.getElementById("langSelect").value;
+    //   Swal.fire("Idioma alterado!", `Você escolheu: ${currentLang.toUpperCase()}`, "info");
+    //   if (selectedFeature) {
+    //     displayFeatureDetails(selectedFeature);
+    //   } else {
+    //     document.getElementById("infoPanel").innerHTML = `<em>${translations[currentLang].click_to_see_details}</em>`;
+    //   }
+    // }
+
+    // Inicializar o mapa OpenLayers
     const map = new ol.Map({
-      target: "map",
-      layers: [new ol.layer.Tile({ source: new ol.source.OSM() })],
-      view: new ol.View({ center: ol.proj.fromLonLat([-35.3192, -7.0594]), zoom: 15 })
+      target: "map", // Div alvo para o mapa
+      layers: [
+        new ol.layer.Tile({
+          source: new ol.source.OSM() // OpenStreetMap como camada base
+        })
+      ],
+      view: new ol.View({
+        center: ol.proj.fromLonLat([-35.423537,-7.132014]), // Centro inicial do mapa (Guarabira, PB, Brasil)
+        zoom: 17 // Nível de zoom inicial
+      }),
+      // Configurar interações para permitir pan com o botão do meio do rato
+      interactions: ol.interaction.defaults({
+        dragPan: {
+          // Combina a condição de ação primária (clique esquerdo/toque)
+          // com a condição do botão do meio do rato (mousebutton(2))
+          condition: function(mapBrowserEvent) {
+            return ol.events.condition.primaryAction(mapBrowserEvent) || ol.events.condition.mousebutton(2)(mapBrowserEvent);
+          }
+        }
+      })
     });
+
+    // Fonte vetorial e camada para feições de lote
     const loteSource = new ol.source.Vector();
     const loteLayer = new ol.layer.Vector({
       source: loteSource,
       style: new ol.style.Style({
-        stroke: new ol.style.Stroke({ color: "blue", width: 1 }),
-        fill: new ol.style.Fill({ color: "rgba(0,0,255,0.1)" })
+        stroke: new ol.style.Stroke({ color: "blue", width: 1 }), // Borda azul
+        fill: new ol.style.Fill({ color: "rgba(0,0,255,0.1)" }) // Preenchimento azul claro
       })
     });
-    map.addLayer(loteLayer);
+    map.addLayer(loteLayer); // Adicionar camada de lote ao mapa
+
+    // Estilo para feições destacadas
     const highlightStyle = new ol.style.Style({
-      stroke: new ol.style.Stroke({ color: "red", width: 2 }),
-      fill: new ol.style.Fill({ color: "rgba(255,0,0,0.2)" })
+      stroke: new ol.style.Stroke({ color: "red", width: 2 }), // Borda vermelha
+      fill: new ol.style.Fill({ color: "rgba(255,0,0,0.2)" }) // Preenchimento vermelho claro
     });
+
+    // Estilo para o marcador da localização atual do utilizador
     const userLocationStyle = new ol.style.Style({
       image: new ol.style.Circle({
         radius: 6,
-        fill: new ol.style.Fill({ color: "#007bff" }),
-        stroke: new ol.style.Stroke({ color: "#fff", width: 2 })
+        fill: new ol.style.Fill({ color: "#007bff" }), // Preenchimento azul
+        stroke: new ol.style.Stroke({ color: "#fff", width: 2 }) // Borda branca
       })
     });
+    // Fonte vetorial e camada para a localização do utilizador
     const userLocationSource = new ol.source.Vector();
     const userLocationLayer = new ol.layer.Vector({ source: userLocationSource });
-    map.addLayer(userLocationLayer);
+    map.addLayer(userLocationLayer); // Adicionar camada de localização do utilizador ao mapa
 
+    /**
+     * Carrega dados de lotes do Firestore e adiciona-os como feições ao mapa.
+     */
     async function carregarLotes() {
-      const snapshot = await db.collection("GeoData").doc("lotes_rib").collection("features").get();
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        const geom = new ol.format.GeoJSON().readGeometry(data.geometry, { dataProjection: "EPSG:4326", featureProjection: "EPSG:3857" });
-        const feature = new ol.Feature(geom);
-        const propertiesToSet = {};
-        for (const key in data) {
-          if (key === "geometry") continue;
-          if (key === "properties" && typeof data[key] === "object") {
-            Object.assign(propertiesToSet, data[key]);
-          } else {
-            propertiesToSet[key] = data[key];
+      try {
+        const snapshot = await db.collection("GeoData").doc("lotes_rib").collection("features").get();
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          // Ler geometria GeoJSON e projetá-la para o sistema de coordenadas do mapa
+          const geom = new ol.format.GeoJSON().readGeometry(data.geometry, {
+            dataProjection: "EPSG:4326", // Projeção dos dados de origem (WGS84)
+            featureProjection: "EPSG:3857" // Projeção do mapa (Web Mercator)
+          });
+          const feature = new ol.Feature(geom); // Criar uma nova feição OpenLayers
+
+          // Definir propriedades do documento Firestore
+          const propertiesToSet = {};
+          for (const key in data) {
+            if (key === "geometry") continue; // Ignorar geometria, pois é tratada separadamente
+            if (key === "properties" && typeof data[key] === "object") {
+              // Se houver um objeto 'properties' aninhado, mesclar o seu conteúdo
+              Object.assign(propertiesToSet, data[key]);
+            } else {
+              propertiesToSet[key] = data[key];
+            }
           }
-        }
-        feature.setProperties(propertiesToSet);
-        loteSource.addFeature(feature);
-      });
+          feature.setProperties(propertiesToSet); // Definir todas as propriedades extraídas
+          loteSource.addFeature(feature); // Adicionar feição à fonte de lotes
+        });
+      } catch (error) {
+        console.error("Erro ao carregar dados do lote:", error);
+        Swal.fire("Erro", "Falha ao carregar os dados dos lotes.", "error");
+      }
     }
-    carregarLotes();
+    carregarLotes(); // Chamar função para carregar lotes no arranque
+
+    /**
+     * Exibe os detalhes de uma feição selecionada no painel de informações.
+     * @param {ol.Feature} feature A feição OpenLayers a ser exibida.
+     */
+    function displayFeatureDetails(feature) {
+      // Limpar destaque da feição previamente selecionada
+      if (selectedFeature) {
+        selectedFeature.setStyle(null);
+      }
+      selectedFeature = feature;
+      selectedFeature.setStyle(highlightStyle); // Aplicar estilo de destaque
+
+      const props = feature.getProperties();
+      const t = translations[currentLang]; // Atalho para as traduções do idioma atual
+
+      let htmlContent = `<h2>${props.inscricao_imobiliaria || t.inscricao_imobiliaria}</h2>`;
+
+      // Seção de Informações do Proprietário (Editável)
+      htmlContent += `<div class="editable-section">`;
+      htmlContent += `<h3>Informações do Proprietário</h3>`;
+      htmlContent += `<div class="form-group">
+                        <label for="nm_prop">${t.nm_prop}</label>
+                        <input type="text" id="nm_prop" data-key="nm_prop" value="${props.nm_prop || ''}" />
+                      </div>`;
+      htmlContent += `<div class="form-group">
+                        <label for="cpf_prop">${t.cpf_prop}</label>
+                        <input type="text" id="cpf_prop" data-key="cpf_prop" value="${props.cpf_prop || ''}" />
+                      </div>`;
+      htmlContent += `<div class="form-group">
+                        <label for="estado_civil">${t.estado_civil}</label>
+                        <select id="estado_civil" data-key="estado_civil" onchange="document.getElementById('conjugeSection').style.display = (this.value === 'Casado' || this.value === 'União Estável') ? 'block' : 'none'; verificarCampos()">
+                          <option value="">Selecione...</option>
+                          <option value="Solteiro" ${props.estado_civil === 'Solteiro' ? 'selected' : ''}>${t.estado_civil_solteiro}</option>
+                          <option value="Casado" ${props.estado_civil === 'Casado' ? 'selected' : ''}>${t.estado_civil_casado}</option>
+                          <option value="União Estável" ${props.estado_civil === 'União Estável' ? 'selected' : ''}>${t.estado_civil_uniao_estavel}</option>
+                          <option value="Viuvo" ${props.estado_civil === 'Viuvo' ? 'selected' : ''}>${t.estado_civil_viuvo}</option>
+                          <option value="Divorciado" ${props.estado_civil === 'Divorciado' ? 'selected' : ''}>${t.estado_civil_divorciado}</option>
+                        </select>
+                      </div>`;
+      htmlContent += `<div id="conjugeSection" style="display: ${ (props.estado_civil === 'Casado' || props.estado_civil === 'União Estável') ? 'block' : 'none'};">
+                        <div class="form-group">
+                          <label for="nm_conj">${t.nm_conj}</label>
+                          <input type="text" id="nm_conj" data-key="nm_conj" value="${props.nm_conj || ''}" />
+                        </div>
+                        <div class="form-group">
+                          <label for="cpf_conj">${t.cpf_conj}</label>
+                          <input type="text" id="cpf_conj" data-key="cpf_conj" value="${props.cpf_conj || ''}" />
+                        </div>
+                      </div>`;
+      
+      // Gerar opções de ano para o dropdown
+      const currentYear = new Date().getFullYear();
+      let yearOptions = '<option value="">Selecione o Ano...</option>';
+      for (let year = currentYear + 5; year >= 1900; year--) { // Anos de 1900 até 5 anos no futuro
+        const selected = (props.data_io && parseInt(props.data_io) === year) ? 'selected' : '';
+        yearOptions += `<option value="${year}" ${selected}>${year}</option>`;
+      }
+
+      htmlContent += `<div class="form-group">
+                        <label for="ano_io">${t.ano_io}</label>
+                        <select id="data_io" data-key="data_io">${yearOptions}</select>
+                      </div>`;
+      htmlContent += `</div>`; // Fim de editable-section
+
+      // Seção de Informações da Propriedade (Somente Leitura)
+      htmlContent += `<div class="non-editable-section">`;
+      htmlContent += `<h3>Informações da Propriedade</h3>`;
+      camposImovel.forEach(key => {
+        const displayKey = t[key] || key;
+        let value = props[key] !== undefined ? props[key] : '';
+        if (key === 'ocup_%') {
+          value = value ? `${(value * 100).toFixed(2)}%` : ''; // Formatar taxa de ocupação como percentagem
+        }
+        htmlContent += `<div class="form-group">
+                          <label><strong>${displayKey}</strong></label>
+                          <div class="value-display">${value || 'N/A'}</div>
+                        </div>`;
+      });
+      htmlContent += `</div>`; // Fim de non-editable-section
+
+      htmlContent += `<button id="saveBtn" onclick="salvarEdicoes()">Salvar Alterações</button>`;
+      document.getElementById("infoPanel").innerHTML = htmlContent;
+
+      // Adicionar event listeners aos inputs após eles serem renderizados
+      document.querySelectorAll("#infoPanel [data-key]").forEach(input => {
+        input.addEventListener('input', verificarCampos);
+        input.addEventListener('change', verificarCampos); // Adicionar listener para 'change' em selects
+      });
+
+      verificarCampos(); // Verificar o estado dos campos ao carregar
+    }
+
+    // Listener de evento de clique único no mapa
     map.on("singleclick", function(evt) {
       map.forEachFeatureAtPixel(evt.pixel, function(feature) {
-        if (selectedFeature) selectedFeature.setStyle(null);
-        selectedFeature = feature;
-        selectedFeature.setStyle(highlightStyle);
-        const props = feature.getProperties();
-        let html = `<h2>${props.inscricao_imobiliaria || "Detalhes do Lote"}</h2><table class="table-attributes">`;
-        html += `<tr><td colspan="2"><strong>Informações do Proprietário</strong></td></tr>`;
-        camposEditaveis.forEach(key => {
-          const value = props[key] ?? "";
-          const label = translations[currentLang]?.[key] || key;
-          html += `<tr><td><strong>${label}</strong></td><td>${value}</td></tr>`;
-        });
-        html += `<tr><td colspan="2"><strong>Informações do Imóvel</strong></td></tr>`;
-        camposImovel.forEach(key => {
-          if (["geometry", "__id", "type", "id", "id_lote", "id_0", ...camposEditaveis].includes(key)) return;
-          let value = props[key];
-          if (key === "id_cobertura") {
-            value = value === "1" ? "Telha cerâmica" : value === "2" ? "Laje" : value;
-          }
-          if (key === "ocup_%") {
-            const taxa = parseFloat(value);
-            const ocupacao = !isNaN(taxa) ? taxa : 0;
-            html += `<tr><td colspan="2"><canvas id="ocupChart"></canvas></td></tr>`;
-            setTimeout(() => {
-              const ctx = document.getElementById("ocupChart").getContext("2d");
-              new Chart(ctx, {
-                type: "pie",
-                data: {
-                  labels: ["Construído", "Livre"],
-                  datasets: [{ data: [ocupacao, 100 - ocupacao], backgroundColor: ["#007bff", "#d3d3d3"] }]
-                },
-                options: {
-                  responsive: false,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: { position: "bottom" },
-                    title: { display: true, text: "Taxa de Ocupação" }
-                  }
-                }
-              });
-            }, 50);
-            value = ocupacao + "%";
-          }
-          const label = translations[currentLang]?.[key.replace("ocup_%", "ocup")] || key;
-          html += `<tr><td><strong>${label}</strong></td><td>${value}</td></tr>`;
-        });
-        html += `</table>`;
-        document.getElementById("infoPanel").innerHTML = html;
+        displayFeatureDetails(feature); // Chamar função para exibir detalhes
       });
     });
 
+    /**
+     * Verifica se todos os campos editáveis obrigatórios estão preenchidos e
+     * ativa/desativa o botão de salvar.
+     */
+    function verificarCampos() {
+      const inputs = document.querySelectorAll("#infoPanel [data-key]");
+      let tudoPreenchido = true;
+      inputs.forEach(input => {
+        // Se a seção do cônjuge estiver oculta, não exigir campos do cônjuge
+        if (input.closest('#conjugeSection')?.style.display === 'none' && ['nm_conj', 'cpf_conj'].includes(input.dataset.key)) {
+          return;
+        }
+        // Para o campo de ano (dropdown), verificar se um valor foi selecionado
+        if (input.id === 'data_io') { // Agora é um select
+          if (!input.value.trim()) {
+            tudoPreenchido = false;
+          }
+        } else if (!input.value.trim()) {
+          tudoPreenchido = false;
+        }
+      });
+      const btn = document.getElementById("saveBtn");
+      if (btn) { // Garantir que o botão existe antes de tentar manipulá-lo
+        btn.disabled = !tudoPreenchido;
+        // Styles for disabled/enabled button are now handled primarily by CSS
+      }
+    }
+
+    /**
+     * Salva os detalhes da propriedade editados no Firestore.
+     */
+    async function salvarEdicoes() {
+      if (!selectedFeature) return; // Nenhuma feição selecionada
+
+      const inputs = document.querySelectorAll("#infoPanel [data-key]");
+      const editedFields = {};
+      inputs.forEach(input => {
+        // Incluir campos do cônjuge apenas se a seção do cônjuge estiver visível
+        if (input.closest('#conjugeSection')?.style.display === 'none' && ['nm_conj', 'cpf_conj'].includes(input.dataset.key)) {
+          editedFields[input.dataset.key] = ''; // Limpar campos do cônjuge se o estado civil não for 'Casado' ou 'União Estável'
+          return;
+        }
+        const key = input.dataset.key;
+        let value = input.value.trim();
+        
+        editedFields[key] = value;
+        selectedFeature.set(key, value); // Atualizar propriedades da feição em memória
+      });
+
+      try {
+        const inscricao = selectedFeature.get("inscricao_imobiliaria");
+        // Consultar Firestore para encontrar o documento por 'inscricao_imobiliaria'
+        const querySnapshot = await db.collection("GeoData").doc("lotes_rib").collection("features")
+          .where("properties.inscricao_imobiliaria", "==", inscricao).get();
+
+        if (!querySnapshot.empty) {
+          const docRef = querySnapshot.docs[0].ref; // Obter referência ao documento
+          const existingData = querySnapshot.docs[0].data(); // Obter os dados existentes do documento
+          
+          // Mesclar os campos editados com as propriedades existentes
+          const mergedProperties = { 
+            ...existingData.properties, 
+            ...editedFields 
+          };
+
+          await docRef.update({ properties: mergedProperties }); // Atualizar o campo 'properties' com os dados mesclados
+          Swal.fire("Sucesso", "Dados atualizados com sucesso!", "success");
+        } else {
+          Swal.fire("Erro", "Não foi possível localizar o documento para atualizar.", "error");
+        }
+      } catch (e) {
+        console.error("Erro ao atualizar o documento:", e);
+        Swal.fire("Erro", "Falha ao atualizar os dados no banco de dados.", "error");
+      }
+    }
+
+    /**
+     * Tenta obter a geolocalização atual do utilizador e centraliza o mapa nela.
+     * Adiciona um marcador para a localização do utilizador.
+     */
     function goToUserLocation() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           function (position) {
             const coords = [position.coords.longitude, position.coords.latitude];
-            const center = ol.proj.fromLonLat(coords);
-            map.getView().animate({ center: center, zoom: 17 });
+            const center = ol.proj.fromLonLat(coords); // Converter coordenadas para a projeção do mapa
+            map.getView().animate({ center: center, zoom: 17 }); // Animar mapa para a localização do utilizador
 
-            if (userLocationFeature) userLocationSource.removeFeature(userLocationFeature);
-            userLocationFeature = new ol.Feature(new ol.geom.Point(center));
-            userLocationFeature.setStyle(userLocationStyle);
-            userLocationSource.addFeature(userLocationFeature);
+            if (userLocationFeature) {
+              userLocationSource.removeFeature(userLocationFeature); // Remover marcador antigo se existir
+            }
+            userLocationFeature = new ol.Feature(new ol.geom.Point(center)); // Criar nova feição de marcador
+            userLocationFeature.setStyle(userLocationStyle); // Aplicar estilo do marcador
+            userLocationSource.addFeature(userLocationFeature); // Adicionar marcador à fonte
           },
           function (error) {
-            alert("Não foi possível obter sua localização.");
+            // Usar SweetAlert2 em vez de alert() para melhor UX
+            Swal.fire("Erro", "Não foi possível obter sua localização. Por favor, verifique as permissões do navegador.", "error");
+            console.error("Erro de geolocalização:", error);
           }
         );
       } else {
-        alert("Geolocalização não suportada pelo seu navegador.");
+        Swal.fire("Erro", "Geolocalização não suportada pelo seu navegador.", "error");
       }
     }
   </script>
